@@ -1,65 +1,143 @@
+# ---------------------------------------------------------
+# 📦 KÜTÜPHANELER
+# Ses kaydı, ses dosyası yazma, konuşma tanıma, çeviri, rastgele seçim, dosya
+# ---------------------------------------------------------
+import os
+import random
 import sounddevice as sd
 import scipy.io.wavfile as wav
 import speech_recognition as sr
 from googletrans import Translator
-import random
-import os
 
-duration = 3
-sample_rate = 44100
+# ---------------------------------------------------------
+# ⚙️ AYARLAR (Sabit değerler)
+# Ses kaydı süresi, örnekleme hızı, maksimum hata, tur sayısı, kelime listeleri
+# ---------------------------------------------------------
+DURATION = 3
+SAMPLE_RATE = 44100
+MAX_HATA = 3
+TUR_SAYISI = 3
 
-seviyeye_gore_kelimeler = {
+KELIMELER = {
     "kolay": ["kedi", "köpek", "elma", "süt", "güneş", "ay"],
     "orta": ["muz", "okul", "arkadaş", "pencere", "sarı", "lamba"],
     "zor": ["teknoloji", "üniversite", "bilgi", "telaffuz", "hayal gücü"],
     "fazla zor": ["teğmen", "oran", "tebrikler", "aksesuar", "albay"]
 }
 
-print(" DOĞRU KONUŞ OYUNUNA HOŞ GELDİNİZ!")
+# ---------------------------------------------------------
+# 🎮 BAŞLANGIÇ EKRANI
+# Oyuncuya hoş geldin mesajı gösterilir
+# ---------------------------------------------------------
+print("\n" + "=" * 50)
+print("🎤 DOĞRU KONUŞ OYUNUNA HOŞ GELDİNİZ! 🎮")
+print("=" * 50)
 
+# ---------------------------------------------------------
+# 🎚️ SEVİYE SEÇİMİ
+# Oyuncu bir zorluk seviyesi seçer (kolay, orta, zor, fazla zor)
+# Yanlış yazarsa tekrar istenir
+# ---------------------------------------------------------
 while True:
-    seviye = input("Hangi seviyeyi seçmek istersiniz? (kolay, orta, zor, fazla zor): ").lower()
-    if seviye in seviyeye_gore_kelimeler:
+    seviye = input("\nSeviye seçin (kolay, orta, zor, fazla zor): ").lower()
+    if seviye in KELIMELER:
         break
-    print(" Geçersiz seviye, lütfen 'kolay', 'orta', 'zor' veya fazla zor yazın.")
+    print("❌ Geçersiz seviye, tekrar deneyin.")
 
+# ---------------------------------------------------------
+# 🧠 ÇEVİRİ VE SES TANIMA ARAÇLARININ HAZIRLANMASI
+# Translator → Türkçe kelimeyi İngilizceye çevirir
+# Recognizer → Ses dosyasını analiz eder
+# ---------------------------------------------------------
 translator = Translator()
 recognizer = sr.Recognizer()
 
-for i in range(3):
-    print("\n" + "="*40)
-    
-    secilen_turkce_kelime = random.choice(seviyeye_gore_kelimeler[seviye])
-    
-    ceviri = translator.translate(secilen_turkce_kelime, src='tr', dest='en')
-    hedef_ingilizce_kelime = ceviri.text.lower()
+# ---------------------------------------------------------
+# 🧮 SKOR VE HATA SAYACI
+# Oyuncunun doğru ve yanlışlarını takip eder
+# ---------------------------------------------------------
+skor = 0
+hatalar = 0
 
-    print(f" Türkçe Kelime: ** {secilen_turkce_kelime.upper()} **")
-    input(" İngilizcesini söylemek için ENTER'a basın ve konuşun...")
+print("\n🔥 Oyun başlıyor! Toplam 3 kelime söyleyeceksiniz.")
+print(f"❗ {MAX_HATA} hata yaparsanız oyun biter.\n")
 
-    print(" Dinleniyor... (3 saniyeniz var)")
-    recording = sd.rec(int(duration * sample_rate), samplerate=sample_rate, channels=1, dtype="int16")
+# ---------------------------------------------------------
+# 🔁 OYUN DÖNGÜSÜ (3 tur)
+# Her turda:
+# 1. Türkçe kelime seçilir
+# 2. İngilizceye çevrilir
+# 3. Oyuncu sesle cevap verir
+# 4. Ses tanınır ve karşılaştırılır
+# ---------------------------------------------------------
+for tur in range(1, TUR_SAYISI + 1):
+    print("\n" + "=" * 40)
+    print(f"📌 TUR {tur}")
+
+    # 🎯 Rastgele Türkçe kelime seçimi
+    turkce_kelime = random.choice(KELIMELER[seviye])
+
+    # 🌍 İngilizce çeviri
+    ingilizce_kelime = translator.translate(turkce_kelime, src="tr", dest="en").text.lower()
+
+    print(f"\nTürkçe Kelime: 🟦 {turkce_kelime.upper()} 🟦")
+    input("🎙 İngilizcesini söylemek için ENTER'a basın...")
+
+    # 🎧 Ses kaydı
+    print("\n🎧 Dinleniyor... (3 saniyeniz var)")
+    recording = sd.rec(int(DURATION * SAMPLE_RATE), samplerate=SAMPLE_RATE, channels=1, dtype="int16")
     sd.wait()
-    wav.write("output.wav", sample_rate, recording)
-    print(" Kayıt tamamlandı, sesiniz analiz ediliyor...")
 
-    with sr.AudioFile("output.wav") as source:
-        audio = recognizer.record(source)
+    # 💾 Ses dosyasını kaydetme
+    wav.write("output.wav", SAMPLE_RATE, recording)
+    print("🔎 Ses analiz ediliyor...")
+
+    # 🗣️ Ses tanıma
     try:
-        soylenen_kelime = recognizer.recognize_google(audio, language="en-US").lower()
-        print(f" Sizin söylediğiniz: {soylenen_kelime}")
+        with sr.AudioFile("output.wav") as source:
+            audio = recognizer.record(source)
+        soylenen = recognizer.recognize_google(audio, language="en-US").lower()
 
-        if soylenen_kelime == hedef_ingilizce_kelime:
-            print(" DOĞRU! Harika telaffuz.")
+        print(f"🗣 Söylediğiniz: {soylenen}")
+
+        # ✔ Doğru mu yanlış mı kontrolü
+        if soylenen == ingilizce_kelime:
+            print("✅ DOĞRU! Harika telaffuz.")
+            skor += 1
         else:
-            print(f" Maalesef eşleşmedi. Doğru cevap şuydu: '{hedef_ingilizce_kelime}'")
+            print(f"❌ Yanlış. Doğru cevap: '{ingilizce_kelime}'")
+            hatalar += 1
 
+    # ⚠️ Ses anlaşılmadı
     except sr.UnknownValueError:
-        print(" Sesiniz anlaşılamadı veya çok sessiz konuştunuz.")
-    except sr.RequestError as e:
-        print(f" İnternet bağlantısı veya hizmet hatası: {e}")
+        print("⚠️ Sesiniz anlaşılamadı.")
+        hatalar += 1
 
-print("\n🏆 Oyun bitti!")
+    # 🌐 İnternet hatası
+    except sr.RequestError:
+        print("🌐 İnternet hatası.")
+        hatalar += 1
 
+    # 📊 Skor ekranı
+    print(f"📊 Skor: {skor} | ❗ Hatalar: {hatalar}/{MAX_HATA}")
+
+    # 💥 Hata limiti dolduysa oyun biter
+    if hatalar >= MAX_HATA:
+        print("\n💥 Çok fazla hata yaptınız, oyun sona erdi!")
+        break
+
+# ---------------------------------------------------------
+# 🏁 OYUN BİTİŞ EKRANI
+# Toplam skor gösterilir
+# ---------------------------------------------------------
+print("\n" + "=" * 50)
+print("🏁 OYUN BİTTİ!")
+print(f"🎯 Toplam Skorunuz: {skor}")
+print("=" * 50)
+
+# ---------------------------------------------------------
+# 🗑️ GEÇİCİ SES DOSYASINI SİLME
+# output.wav dosyası temizlenir
+# ---------------------------------------------------------
 if os.path.exists("output.wav"):
     os.remove("output.wav")
